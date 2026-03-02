@@ -193,13 +193,13 @@ type vmStatusModel struct {
 	// State stores information about the last known state of the vm and the spec.
 	State types.String `tfsdk:"state"`
 	// Volumes holds the status of the volumes.
-	Volumes types.ObjectType `tfsdk:"volumes"` // TODO use map[string]volumeStatusModel
+	Volumes types.Object `tfsdk:"volumes"` // TODO use map[string]volumeStatusModel
 	// KernelMount holds the status of the kernel mount point.
 	KernelMount mountModel `tfsdk:"kernel_mount"`
 	// InitrdMount holds the status of the initrd mount point.
 	InitrdMount mountModel `tfsdk:"initrd_mount"`
 	// NetworkInterfaces holds the status of the network interfaces.
-	NetworkInterfaces types.ObjectType `tfsdk:"network_interfaces"` // TODO use map[string]networkInterfaceModel
+	NetworkInterfaces types.Object `tfsdk:"network_interfaces"` // TODO use map[string]networkInterfaceModel
 	// Retry is a counter about how many times we retried to reconcile.
 	Retry types.Int64 `tfsdk:"retry"`
 }
@@ -573,20 +573,108 @@ func (d *vmsDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := d.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read example, got error: %s", err))
-	//     return
-	// }
+	httpResp, err := d.client.List("", "")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list microvms, got error: %s", err))
+		return
+	}
 
-	// For the purposes of this example code, hardcoding a response value to
-	// save into the Terraform state.
-	// data.Id = types.StringValue("example-id")
+	for _, mvm := range httpResp.Microvm {
+		model := vmModel{
+			Spec: vmSpecModel{
+				ID:         types.StringValue(mvm.Spec.Id),
+				Namespace:  types.StringValue(mvm.Spec.Namespace),
+				VCPU:       types.Int64Value(int64(mvm.Spec.Vcpu)),
+				MemoryInMB: types.Int64Value(int64(mvm.Spec.MemoryInMb)),
+				Labels:     types.ObjectNull(nil),
+				Metadata:   types.ObjectNull(nil),
+			},
+			Status: vmStatusModel{
+				State:             types.StringValue(string(mvm.Status.State)),
+				Volumes:           types.ObjectNull(nil),
+				NetworkInterfaces: types.ObjectNull(nil),
+			},
+		}
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
+		if mvm.Spec.Uid != nil {
+			model.Spec.UID = types.StringValue(*mvm.Spec.Uid)
+		} else {
+			model.Spec.UID = types.StringNull()
+		}
+
+		if mvm.Spec.Kernel != nil {
+			model.Spec.Kernel = kernelModel{
+				Image:   types.StringValue(mvm.Spec.Kernel.Image),
+				Cmdline: types.ObjectNull(nil),
+			}
+			if mvm.Spec.Kernel.Filename != nil {
+				model.Spec.Kernel.Filename = types.StringValue(*mvm.Spec.Kernel.Filename)
+			} else {
+				model.Spec.Kernel.Filename = types.StringNull()
+			}
+
+			model.Spec.Kernel.AddNetworkConfig = types.BoolValue(mvm.Spec.Kernel.AddNetworkConfig)
+		}
+
+		if mvm.Spec.Initrd != nil {
+			model.Spec.Initrd = initrdModel{
+				Image: types.StringValue(mvm.Spec.Initrd.Image),
+			}
+			if mvm.Spec.Initrd.Filename != nil {
+				model.Spec.Initrd.Filename = types.StringValue(*mvm.Spec.Initrd.Filename)
+			} else {
+				model.Spec.Initrd.Filename = types.StringNull()
+			}
+		}
+
+		if mvm.Spec.RootVolume != nil {
+			model.Spec.RootVolume = volumeModel{
+				ID:         types.StringValue(mvm.Spec.RootVolume.Id),
+				IsReadOnly: types.BoolValue(mvm.Spec.RootVolume.IsReadOnly),
+			}
+
+			if mvm.Spec.RootVolume.MountPoint != nil {
+				model.Spec.RootVolume.MountPoint = types.StringValue(*mvm.Spec.RootVolume.MountPoint)
+			} else {
+				model.Spec.RootVolume.MountPoint = types.StringNull()
+			}
+			if mvm.Spec.RootVolume.PartitionId != nil {
+				model.Spec.RootVolume.PartitionID = types.StringValue(*mvm.Spec.RootVolume.PartitionId)
+			} else {
+				model.Spec.RootVolume.PartitionID = types.StringNull()
+			}
+			if mvm.Spec.RootVolume.SizeInMb != nil {
+				model.Spec.RootVolume.SizeInMB = types.Int64Value(int64(*mvm.Spec.RootVolume.SizeInMb))
+			} else {
+				model.Spec.RootVolume.SizeInMB = types.Int64Null()
+			}
+
+			if mvm.Spec.RootVolume.Source != nil {
+				if mvm.Spec.RootVolume.Source.ContainerSource != nil {
+					model.Spec.RootVolume.Source = volumeSourceModel{
+						Container: types.StringValue(*mvm.Spec.RootVolume.Source.ContainerSource),
+					}
+				}
+			}
+		}
+
+		if mvm.Status.KernelMount != nil {
+			model.Status.KernelMount = mountModel{
+				Type:   types.StringValue(string(mvm.Status.KernelMount.Type)),
+				Source: types.StringValue(mvm.Status.KernelMount.Source),
+			}
+		}
+
+		if mvm.Status.InitrdMount != nil {
+			model.Status.InitrdMount = mountModel{
+				Type:   types.StringValue(string(mvm.Status.InitrdMount.Type)),
+				Source: types.StringValue(mvm.Status.InitrdMount.Source),
+			}
+		}
+
+		data.VMs = append(data.VMs, model)
+	}
+
 	tflog.Trace(ctx, "read a data source")
 
 	// Save data into Terraform state

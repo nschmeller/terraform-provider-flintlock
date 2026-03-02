@@ -115,9 +115,7 @@ func (p *FlintlockProvider) Configure(ctx context.Context, req provider.Configur
 }
 
 func (p *FlintlockProvider) Resources(ctx context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		NewExampleResource,
-	}
+	return []func() resource.Resource{}
 }
 
 func (p *FlintlockProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
