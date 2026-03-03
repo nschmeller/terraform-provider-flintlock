@@ -62,3 +62,62 @@ In order to run the full suite of Acceptance tests, run `make testacc`.
 ```shell
 make testacc
 ```
+
+### Running Integration Tests
+
+This provider includes integration tests that test against a real Flintlock server. The tests are organized into two categories:
+
+1. **Unit Tests** - Test the provider logic without requiring Flintlock
+2. **Integration Tests** - Test against a real Flintlock server
+
+#### Running Tests with nektos/act
+
+The GitHub Actions workflows can be tested locally using [nektos/act](https://github.com/nektos/act).
+
+**Prerequisites for full integration tests:**
+- Docker installed and running
+- `containerd` installed and running
+- Network bridge `br0` created
+
+```bash
+# Create the br0 bridge (required for Flintlock)
+sudo ip link add br0 type bridge
+sudo ip addr add 10.0.0.1/24 dev br0
+sudo ip link set br0 up
+
+# Start containerd (required for Flintlock VM creation)
+sudo containerd &
+
+# Run unit tests (no special requirements)
+act -j unit-tests
+
+# Run integration tests (requires br0 bridge and containerd)
+act -j integration-tests
+
+# Run all jobs
+act
+```
+
+#### Running Tests Manually
+
+```bash
+# Run unit tests only
+TF_ACC=1 go test -v -timeout 5m ./internal/provider/ -run TestAccVMsDataSource -tags='!integration'
+
+# Run integration tests (connectivity only, no containerd required)
+TF_ACC=1 go test -v -timeout 5m ./internal/provider/ -run TestIntegration_FlintlockConnectivity -tags=integration
+
+# Run full integration tests (requires containerd)
+TF_ACC=1 CONTAINERD_REQUIRED=1 go test -v -timeout 10m ./internal/provider/ -run TestIntegration_VMsDataSource_WithVMs -tags=integration
+
+# Skip all integration tests
+TF_ACC_SKIP_INTEGRATION=1 go test -v ./internal/provider/
+```
+
+#### Test Descriptions
+
+| Test | Description | Requirements |
+|------|-------------|--------------|
+| `TestAccVMsDataSource` | Unit test for VMs data source | None |
+| `TestIntegration_FlintlockConnectivity` | Tests provider can connect to Flintlock | `br0` bridge |
+| `TestIntegration_VMsDataSource_WithVMs` | Full test with VM creation | `br0` bridge, `containerd` |
