@@ -37,7 +37,7 @@ jobs:
         env:
           TF_ACC: "1"
         run: |
-          go test -v -timeout 5m ./internal/provider/ -run TestAccVMsDataSource -tags=!integration
+          go test -v -timeout 10m ./internal/provider/ -tags='!integration'
 
   integration-tests:
     name: Integration Tests (With Flintlock Server)
@@ -123,25 +123,14 @@ jobs:
           cat /tmp/flintlockd.log
           exit 1
 
-      - name: Run Integration Tests (Connectivity)
-        env:
-          TF_ACC: "1"
-          FLINTLOCK_ENDPOINT: "localhost:9090"
-          FLINTLOCK_AUTHTOKEN: "test-token"
-        run: |
-          go test -v -timeout 5m ./internal/provider/ -run "TestIntegration_FlintlockConnectivity" -tags=integration
-
-      - name: Run Integration Tests (Full with VMs)
-        if: success()
+      - name: Run Integration Tests
         env:
           TF_ACC: "1"
           FLINTLOCK_ENDPOINT: "localhost:9090"
           FLINTLOCK_AUTHTOKEN: "test-token"
           CONTAINERD_REQUIRED: "0"
         run: |
-          # Note: Full VM creation test requires Firecracker and proper containerd setup
-          # This test is skipped by default. Set CONTAINERD_REQUIRED=1 to enable.
-          go test -v -timeout 10m ./internal/provider/ -run "TestIntegration_VMsDataSource_WithVMs" -tags=integration || true
+          go test -v -timeout 10m ./internal/provider/ -tags=integration
 
       - name: Show Flintlock logs on failure
         if: failure()

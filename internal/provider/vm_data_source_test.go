@@ -1,8 +1,10 @@
 package provider
 
 import (
+	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -12,6 +14,13 @@ func TestAccVMsDataSource(t *testing.T) {
 	if endpoint == "" {
 		endpoint = "localhost:9090"
 	}
+
+	// Skip if Flintlock is not reachable (unit test mode)
+	conn, err := net.DialTimeout("tcp", endpoint, 2*time.Second)
+	if err != nil {
+		t.Skip("Flintlock endpoint not reachable, skipping acceptance test. Run with Flintlock server for full testing.")
+	}
+	conn.Close()
 
 	authToken := os.Getenv("FLINTLOCK_AUTHTOKEN")
 	if authToken == "" {
